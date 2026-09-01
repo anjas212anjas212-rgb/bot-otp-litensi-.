@@ -228,7 +228,7 @@ async function kirimMenuUtamaToko(ctx, userId, namaLengkap, usernameTelegram) {
                 resize_keyboard: true
             }
         }).catch(() => {});
-        await ctx.reply("Silakan tentukan metode penerimaan kode OTP Anda:", {
+        await ctx.reply("Silakan tell me metode penerimaan kode OTP Anda:", {
             reply_markup: {
                 inline_keyboard: [
                     [{ text: '📱 Terima Otp Via Whatsapp', callback_data: 'jalur_whatsapp' }],
@@ -362,7 +362,7 @@ async function tampilkanPanelBelanja(ctx, userId, jalurOTP) {
         [Markup.button.callback("🛒 Shopee (" + sShopee + ") - Rp " + hShopee, "order_shopee_" + jalurOTP)],
         [Markup.button.callback("🛒 DANA (" + sDana + ") - Rp " + hDana, "order_dana_" + jalurOTP)],
         [Markup.button.callback("🛒 Facebook (" + sFb + ") - Rp " + hFb, "order_fb_" + jalurOTP)],
-        [Markup.button.callback("🛒 TikTok (" + sTiktok + ") - Rp " + hTiktok, "order_tiktok_" + jalurOTP)],
+        [Markup.button.callback("🛒 TikTok (" + sTiktok + ") - Rp " + sTiktok, "order_tiktok_" + jalurOTP)],
         [Markup.button.callback("🛒 Kopi Kenangan (" + sKopi + ") - Rp " + hKopi, "order_kopikenangan_" + jalurOTP)],
         [Markup.button.callback("🛒 Gojek (" + sGojek + ") - Rp " + hGojek, "order_gojek_" + jalurOTP)],
         [Markup.button.callback("🛒 Grab (" + sGrab + ") - Rp " + hGrab, "order_grab_" + jalurOTP)],
@@ -485,8 +485,9 @@ async function prosesOrderSewa(ctx, namaAplikasi, fileStok, hargaSewa, jalurOTP)
     }, 5000);
     transaksi_aktif[nomorFix].timerRef = intervalTimer;
 }
+
 bot.action(/^batal_sewa_(.+)$/, async (ctx) => {
-    const nomorWA = ctx.match;
+    const nomorWA = ctx.match[1];
     if (!transaksi_aktif[nomorWA]) return ctx.answerCbQuery('⚠️ Transaksi tidak ditemukan!', { show_alert: true });
     const tx = transaksi_aktif[nomorWA];
 
@@ -503,9 +504,8 @@ bot.action(/^batal_sewa_(.+)$/, async (ctx) => {
     await ctx.answerCbQuery('Sewa nomor sukses dibatalkan!').catch(() => {});
     await ctx.editMessageText(`❌ **SEWA NOMOR BERHASIL DIBATALKAN**\n\nNomor Sewa: \`${nomorWA}\`\nWaktu tunggu telah melebihi batas 3 menit awal. Saldo Anda aman tidak terpotong.`).catch(() => {});
 });
-
 bot.action(/^refresh_otp_(.+)$/, async (ctx) => {
-    const nomorFix = ctx.match.replace(/\D/g, '').trim();
+    const nomorFix = ctx.match[1].replace(/\D/g, '').trim();
     if (!transaksi_aktif[nomorFix]) return ctx.answerCbQuery('⚠️ Sesi sewa tidak aktif!', { show_alert: true });
     
     const tx = transaksi_aktif[nomorFix];
@@ -528,7 +528,7 @@ bot.action(/^refresh_otp_(.+)$/, async (ctx) => {
 });
 
 bot.action(/^repeat_sama_(.+)$/, async (ctx) => {
-    const nomorFix = ctx.match.replace(/\D/g, '').trim();
+    const nomorFix = ctx.match[1].replace(/\D/g, '').trim();
     const namaUser = ctx.from.first_name || "Pembeli";
     if (!transaksi_aktif[nomorFix]) {
         return ctx.answerCbQuery('⚠️ Sesi sewa nomor ini sudah habis! Silakan lakukan sewa nomor baru.', { show_alert: true }).catch(() => {});
@@ -548,7 +548,7 @@ bot.action(/^repeat_sama_(.+)$/, async (ctx) => {
 
 bot.action('cek_ram_saldo', (ctx) => { ctx.answerCbQuery('💡 Saldo aman dan otomatis terpotong saat OTP sukses masuk!', { show_alert: true }).catch(() => {}); });
 bot.action('tips_aman', (ctx) => { ctx.answerCbQuery().catch(() => {}); ctx.reply('🛡️ TIPS ANTI-TAMENG:\n1. Gunakan koneksi internet stabil.'); });
-// ==================== FIX JALUR NOTA BARCODE QRIS DANA PREMIUM MANUAL (KEMBALI KE AWAL) ====================
+// ==================== FIX JALUR NOTA BARCODE QRIS DANA PREMIUM MANUAL ====================
 bot.hears('💳 Top Up Saldo', (ctx) => { 
     status_user[ctx.from.id] = 'MENUNGGU_NOMINAL_TOPUP'; 
     ctx.reply('✏️ Silakan ketik jumlah nominal top up (Minimal Rp 1.000):'); 
@@ -564,7 +564,7 @@ bot.action(/^input_otp_(\d+)_(.+)$/, async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return ctx.answerCbQuery('❌ Akses Ditolak!', { show_alert: true });
     const dataCallback = ctx.callbackQuery.data || ""; 
     const pecahData = dataCallback.split("_"); 
-    const targetUserId = pecahData[2]; 
+    const targetUserId = parseInt(pecahData[2]); 
     const nomorSewa = pecahData[3];   
     if (!targetUserId || !nomorSewa) return ctx.answerCbQuery('❌ Gagal membaca data transaksi!', { show_alert: true });
     
@@ -575,59 +575,71 @@ bot.action(/^input_otp_(\d+)_(.+)$/, async (ctx) => {
 
 bot.on('text', async (ctx) => {
     const userId = ctx.from.id; const text = ctx.message.text.trim();
-    if (status_user[userId] === 'MENUNGGU_NOMINAL_TOPUP') {
-        const nom = parseInt(text); if (isNaN(nom) || nom < 1000) return ctx.reply('❌ Nominal salah atau kurang dari Rp 1.000.');
-        delete status_user[userId]; const unik = Math.floor(Math.random() * 900) + 100; const total = nom + unik;
+    
+    // 🛠️ FIX LOGIKAL: Memastikan status user atau ketikan angka murni langsung diproses otomatis
+    if (status_user[userId] === 'MENUNGGU_NOMINAL_TOPUP' || (!isNaN(text) && parseInt(text) >= 1000)) {
+        const nom = parseInt(text); 
+        // 🔒 LOCK MINIMAL DEPOSIT: Wajib minimal Rp 1.000
+        if (isNaN(nom) || nom < 1000) {
+            return ctx.reply('❌ Gagal Sistem! Nominal pengisian salah atau kurang dari batas minimal Rp 1.000.');
+        }
+        
+        delete status_user[userId]; 
+        const unik = Math.floor(Math.random() * 900) + 100; 
+        const total = nom + unik;
         request_topup[userId] = { nom, total, nama: ctx.from.first_name || "User" };
         
         const waktuSekarang = new Date();
-        const waktuBatas = new Date(waktuSekarang.getTime() + 3 * 60 * 1000);
+        const waktuBatas = new Date(waktuSekarang.getTime() + 5 * 60 * 1000); 
         const timestampKadaluwarsa = waktuBatas.getTime();
         const pad = (n) => String(n).padStart(2, '0');
         const jamBatas = `${pad(waktuBatas.getHours())}:${pad(waktuBatas.getMinutes())}:${pad(waktuBatas.getSeconds())}`;
         
+        // 🛠️ REVISI PREMIUM TEXT: Menghapus total baris tulisan koneksi teknis agar lebih bersih dan berkelas
         const buatTeksNota = (sisaWaktuTeks) => {
-            return `💳 **NOTA TAGIHAN INJEKSI SALDO**\n` +
+            return `🧾 **NOTA TAGIHAN DEPOSIT SALDO**\n` +
                    `━━━━━━━━━━━━━━━━━━━━━━\n` +
-                   `📡 **KONEKSI :** SELULER CLOUD GATEWAY\n` +
-                   `🚨 **TOTAL TRANSFER :** Rp ${total.toLocaleString('id-ID')}\n` +
-                   `⏳ **SISA WAKTU :** \`${sisaWaktuTeks}\` (Hingga ${jamBatas})\n` +
+                   `🚨 **TOTAL TRANSFER :** Rp *${total.toLocaleString('id-ID')}*\n` +
+                   `⏳ **BATAS WAKTU :** \`${sisaWaktuTeks}\` (Hingga ${jamBatas})\n` +
                    `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-                   `⚠️ *Silakan scan barcode QRIS DANA di atas. Pastikan nominal transfer sama persis hingga 3 angka terakhir agar terbaca oleh sistem komputasi awan.*`;
+                   `⚠️ *Silakan scan barcode QRIS DANA di atas. Pastikan nominal transfer Anda sama persis hingga 3 angka terakhir agar sistem komputasi otomatis kami bisa langsung memvalidasi dana Anda.*`;
         };
+        
         const tombolPembeli = { inline_keyboard: [[{ text: "✅ Selesai Transfer (Verifikasi Server)", callback_data: `pembeli_konfirmasi_${userId}_${nom}_${total}_${timestampKadaluwarsa}` }]] };
-        let pesanNotaObj;
+        
         if (fs.existsSync(GAMBAR_QRIS)) {
-            pesanNotaObj = await ctx.replyWithPhoto({ source: GAMBAR_QRIS }, { caption: buatTeksNota("03:00"), parse_mode: 'Markdown', reply_markup: tombolPembeli }).catch(() => {});
+            await ctx.replyWithPhoto({ source: GAMBAR_QRIS }, { caption: buatTeksNota("05:00"), parse_mode: 'Markdown', reply_markup: tombolPembeli }).then((m) => {
+                request_topup[userId].msgId = m.message_id;
+            }).catch(() => {});
         } else {
-            pesanNotaObj = await ctx.reply(buatTeksNota("03:00"), { parse_mode: 'Markdown', reply_markup: tombolPembeli }).catch(() => {});
+            await ctx.reply("⚠️ *Pemberitahuan Server: File gambar qris.png tidak ditemukan di server Cloud, pesan dikirim via nota teks digital.*\n\n" + buatTeksNota("05:00"), { parse_mode: 'Markdown', reply_markup: tombolPembeli }).then((m) => {
+                request_topup[userId].msgId = m.message_id;
+            }).catch(() => {});
         }
-        if (pesanNotaObj) {
-            let totalDetikNota = 3 * 60;
-            const intervalTimerNota = setInterval(async () => {
-                totalDetikNota -= 5;
-                if (totalDetikNota <= 0) {
-                    clearInterval(intervalTimerNota);
-                    if (request_topup[userId]) { delete request_topup[userId]; }
-                    try {
-                        const teksKadaluwarsa = `❌ **NOTA INJEKSI SALDO KADALUWARSA**\n━━━━━━━━━━━━━━━━━━━━━━\nSesi alokasi dana Rp ${total.toLocaleString('id-ID')} telah berakhir and otomatis ditolak karena melewati batas waktu 3 menit. Silakan ajukan top up baru jika ingin melanjutkan.`;
-                        if (fs.existsSync(GAMBAR_QRIS)) { await bot.telegram.editMessageCaption(userId, pesanNotaObj.message_id, null, teksKadaluwarsa, { reply_markup: { inline_keyboard: [] } }); } 
-                        else { await bot.telegram.editMessageText(userId, pesanNotaObj.message_id, null, teksKadaluwarsa, { reply_markup: { inline_keyboard: [] } }); }
-                    } catch (err) {}
-                } else {
-                    const menitSisa = Math.floor(totalDetikNota / 60); const detikSisa = totalDetikNota % 60;
-                    const teksWaktuBerjalan = `${pad(menitSisa)}:${pad(detikSisa)}`;
-                    try {
-                        if (fs.existsSync(GAMBAR_QRIS)) { await bot.telegram.editMessageCaption(userId, pesanNotaObj.message_id, null, buatTeksNota(teksWaktuBerjalan), { parse_mode: 'Markdown', reply_markup: tombolPembeli }); } 
-                        else { await bot.telegram.editMessageText(userId, pesanNotaObj.message_id, null, buatTeksNota(teksWaktuBerjalan), { parse_mode: 'Markdown', reply_markup: tombolPembeli }); }
-                    } catch (editErr) {}
-                }
-            }, 5000);
-            if (!request_topup[userId].timers) request_topup[userId].timers = {};
-            request_topup[userId].timerRef = intervalTimerNota;
-        }
+        let totalDetikNota = 5 * 60;
+        const intervalTimerNota = setInterval(async () => {
+            totalDetikNota -= 5;
+            if (totalDetikNota <= 0) {
+                clearInterval(intervalTimerNota);
+                if (request_topup[userId]) { delete request_topup[userId]; }
+                try {
+                    const teksKadaluwarsa = `❌ **NOTA INJEKSI SALDO KADALUWARSA**\n━━━━━━━━━━━━━━━━━━━━━━\nSesi alokasi dana Rp ${total.toLocaleString('id-ID')} telah berakhir dan otomatis ditolak karena melewati batas waktu. Silakan ajukan top up baru jika ingin melanjutkan.`;
+                    if (fs.existsSync(GAMBAR_QRIS)) { await bot.telegram.editMessageCaption(userId, request_topup[userId].msgId, null, teksKadaluwarsa, { reply_markup: { inline_keyboard: [] } }); } 
+                    else { await bot.telegram.editMessageText(userId, request_topup[userId].msgId, null, teksKadaluwarsa, { reply_markup: { inline_keyboard: [] } }); }
+                } catch (err) {}
+            } else {
+                const menitSisa = Math.floor(totalDetikNota / 60); const detikSisa = totalDetikNota % 60;
+                const teksWaktuBerjalan = `${pad(menitSisa)}:${pad(detikSisa)}`;
+                try {
+                    if (fs.existsSync(GAMBAR_QRIS)) { await bot.telegram.editMessageCaption(userId, request_topup[userId].msgId, null, buatTeksNota(teksWaktuBerjalan), { parse_mode: 'Markdown', reply_markup: tombolPembeli }); } 
+                    else { await bot.telegram.editMessageText(userId, request_topup[userId].msgId, null, buatTeksNota(teksWaktuBerjalan), { parse_mode: 'Markdown', reply_markup: tombolPembeli }); }
+                } catch (editErr) {}
+            }
+        }, 5000);
+        request_topup[userId].timerRef = intervalTimerNota;
         return;
     }
+
     if (status_user[userId] && status_user[userId].status === 'MENUNGGU_INPUT_OTP_MANUAL') {
         const dataSewa = status_user[userId]; const idPembeli = parseInt(dataSewa.target); const nomorFix = dataSewa.nomor;
         delete status_user[userId]; 
@@ -671,20 +683,18 @@ bot.on('text', async (ctx) => {
 }); 
 
 bot.action(/^pembeli_konfirmasi_(\d+)_(\d+)_(\d+)_(\d+)$/, async (ctx) => {
-    const targetUserId = ctx.match[1]; const nominalAsli = ctx.match[2]; const totalTransfer = ctx.match[3]; const waktuKadaluwarsa = parseInt(ctx.match[4]); const namaUser = ctx.from.first_name || "User";
+    const targetUserId = parseInt(ctx.match[1]); const nominalAsli = parseInt(ctx.match[2]); const totalTransfer = parseInt(ctx.match[3]); const waktuKadaluwarsa = parseInt(ctx.match[4]); const namaUser = ctx.from.first_name || "User";
     const waktuKlikSekarang = new Date().getTime();
     if (waktuKlikSekarang > waktuKadaluwarsa) {
         await ctx.answerCbQuery('⚠️ Waktu pembayaran telah habis!', { show_alert: true }).catch(() => {});
-        await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
-        return ctx.reply('❌ **Nota Tagihan Expired!** Batas waktu 3 menit telah habis.');
+        return ctx.reply('❌ **Nota Tagihan Expired!** Batas waktu transfer telah habis.');
     }
     if (request_topup[targetUserId] && request_topup[targetUserId].timerRef) { clearInterval(request_topup[targetUserId].timerRef); }
     await ctx.answerCbQuery('⏳ Konfirmasi terkirim! Menunggu verifikasi jaringan server...', { show_alert: true }).catch(() => {});
     try {
-        if (fs.existsSync(GAMBAR_QRIS)) { await bot.telegram.editMessageCaption(targetUserId, ctx.callbackQuery.message.message_id, null, `✅ **PERMINTAAN INJEKSI SEDANG DIVERIFIKASI SERVER**\n━━━━━━━━━━━━━━━━━━━━━━\nTagihan sebesar Rp ${parseInt(totalTransfer).toLocaleString('id-ID')} sedang dianalisis kesesuaian datanya. Saldo akan otomatis bertambah setelah disetujui.`, { reply_markup: { inline_keyboard: [] } }); } 
-        else { await bot.telegram.editMessageText(targetUserId, ctx.callbackQuery.message.message_id, null, `✅ **PERMINTAAN INJEKSI SEDANG DIVERIFIKASI SERVER**\n━━━━━━━━━━━━━━━━━━━━━━\nTagihan sebesar Rp ${parseInt(totalTransfer).toLocaleString('id-ID')} sedang dianalisis kesesuaian datanya. Saldo akan otomatis bertambah setelah disetujui.`, { reply_markup: { inline_keyboard: [] } }); }
+        await bot.telegram.sendMessage(targetUserId, `✅ **PERMINTAAN INJEKSI SEDANG DIVERIFIKASI SERVER**\n━━━━━━━━━━━━━━━━━━━━━━\nTagihan sebesar Rp ${totalTransfer.toLocaleString('id-ID')} sedang dianalisis kesesuaian datanya. Saldo akan otomatis bertambah setelah disetujui.`);
     } catch (e) {}
-    await bot.telegram.sendMessage(ADMIN_ID, `💵 **DEPOSIT REQUEST**\nUser: ${namaUser} (\`${targetUserId}\`)\nTotal Transfer: Rp ${parseInt(totalTransfer).toLocaleString('id-ID')}`, { 
+    await bot.telegram.sendMessage(ADMIN_ID, `💵 **DEPOSIT REQUEST**\nUser: ${namaUser} (\`${targetUserId}\`)\nTotal Transfer: Rp ${totalTransfer.toLocaleString('id-ID')}`, { 
         reply_markup: { inline_keyboard: [[{ text: "✅ Terima", callback_data: `acc_${targetUserId}_${nominalAsli}` }, { text: "❌ Tolak", callback_data: `rej_${targetUserId}_${nominalAsli}` }]] } 
     }).catch((e) => console.log("Gagal mengirim pesan ke admin:", e.message));
 });
@@ -703,7 +713,7 @@ bot.action(/^rej_(\d+)_(\d+)$/, async (ctx) => {
     if (ctx.from.id !== ADMIN_ID) return;
     const target = parseInt(ctx.match[1]);
     await ctx.editMessageText('❌ Deposit telah ditolak oleh admin.').catch(() => {});
-    const teksSistemTolak = `❌ **TRANSAKSI DEPOSIT GAGAL**\n━━━━━━━━━━━━━━━━━━━━━━\n**Status:** Gagal / Dibatalkan Pihak Sistem\n\nSilakan buat nota tagihan baru and pastikan nominal transfer sama persis hingga 3 angka terakhir.`;
+    const teksSistemTolak = `❌ **TRANSAKSI DEPOSIT GAGAL**\n━━━━━━━━━━━━━━━━━━━━━━\n**Status:** Gagal / Dibatalkan Pihak Jaringan Server\n\nSilakan buat nota tagihan baru dan pastikan nominal transfer sama persis hingga 3 angka terakhir.`;
     await bot.telegram.sendMessage(target, teksSistemTolak, { parse_mode: 'Markdown' }).catch(() => {});
 });
 
